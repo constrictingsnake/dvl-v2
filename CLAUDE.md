@@ -80,7 +80,7 @@ users/{uid}/
 - **Store FCM tokens as an array on the user document.** Users may have multiple devices. Fan out notifications to all tokens and prune any that return `messaging/registration-token-not-registered`.
 - **Firebase Blaze (pay-as-you-go) plan is required.** Cloud Functions making outbound HTTP calls do not run on the free Spark plan.
 - **Ship baseline Firestore security rules with the first write (Phase 1), harden before release (Phase 5).** Users may only read/write their own documents: `request.auth.uid == resource.data.uid`. Never run user data through default/open rules across multiple phases. The poller Function uses a service account that bypasses client rules.
-- **Add a Blaze budget alert in Phase 0.** A buggy adaptive-polling loop bills real money. Cap items per user and consider a poller circuit breaker.
+- **Add a Blaze budget alert in Phase 0 — plus a hard kill-switch.** A buggy adaptive-polling loop bills real money. A GCP budget alert is **notification-only and does not stop spending**, so also wire budget → Pub/Sub → a Cloud Function that disables project billing. Cap items per user and add a poller circuit breaker. (This deploys the first Cloud Function in Phase 0 — a deliberate, accepted deviation from the Phase 3 Functions timing, chosen for cost safety.)
 
 ## Features
 
@@ -111,7 +111,7 @@ Each adapter is a self-contained module that exports:
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 | WXT scaffold, Firebase project (Blaze), OAuth client, Firestore schema, CI, **budget alert, Firebase Emulator Suite, adapter-fixture test harness** | not started |
+| 0 | WXT scaffold, Firebase project (Blaze), OAuth client, Firestore schema, CI, **budget alert + kill-switch, Firebase Emulator Suite, adapter-fixture test harness** — see [Phase 0 — plan of operations](#phase-0--plan-of-operations) | in progress |
 | 1 | OAuth flow, dashboard/popup UI shell (built in the extension), Firestore listener, item cards, **baseline security rules** | not started |
 | 2 | Content scripts + **eBay adapter only (auction / BIN / ended)**, service worker write path | not started |
 | 3 | Cloud Functions + Scheduler, fetch/diff, adaptive polling — **prove the full eBay vertical slice end-to-end before adding any second adapter** | not started |
@@ -124,6 +124,22 @@ MVP (auth + 1 site + manual polling, no push) ≈ 4–5 weeks solo.
 - **Security rules ship as a baseline in Phase 1** (the moment of the first Firestore write), not at the end. Rules are code and evolve with the schema; only the *hardening pass* belongs in Phase 5. Never run user data through default/open rules across multiple phases.
 - **One adapter (eBay) as a full vertical slice through Phases 2–3.** Prove capture → write → poll → diff on a single site before building a second adapter against unvalidated parsing assumptions. eBay alone covers three HTML structures.
 - **Don't extract `packages/ui` for a single consumer.** Build the popup/dashboard UI directly in the extension. Extract to the shared package only when the companion website is greenlit and there's a second consumer.
+
+## Phase 0 — plan of operations
+
+Resume from the first unchecked box. Each step lists its **done-when** gate. Corrections from the original draft are flagged ⚠️.
+
+- [x] **0. Repo hygiene (ongoing).** Work on a branch, not `main`; commit after each step. `.gitkeep` empty placeholder dirs so the structure survives a clone. ⚠️ **Delete `packages/ui`** — CLAUDE.md forbids it until the companion site is greenlit (a second consumer); it's currently scaffolded in violation. *Done-when: `packages/ui` removed, placeholders `.gitkeep`'d, scaffold committed on a branch.*
+- [x] **1. Initialize the monorepo.** pnpm workspaces + Turborepo; `/apps`, `/packages`, `/functions`; `.gitignore`; `tsconfig.base.json` + root `tsconfig.json` references. ⚠️ **Add root ESLint + Prettier config** — the `turbo.json` `lint` task is a no-op without it and CI (step 9) depends on it. *Done-when: `pnpm install`, `pnpm typecheck`, `pnpm lint` all run clean from root.*
+- [ ] **2. Scaffold the WXT extension.** `pnpm create wxt` in `apps/extension/` (React + TypeScript template), joined to the workspace as `@dvl/extension`. ⚠️ **Pin a stable extension ID** via a `key` in the WXT manifest — step 7's OAuth redirect URI embeds the ID and it must not change on reload. *Done-when: `pnpm dev` opens a hot-reloading extension and the ID is stable across restarts.*
+- [ ] **3. Create the Firebase project (Blaze).** Create in console, upgrade to Blaze, enable Firestore, Auth (Google provider), Cloud Functions, Cloud Messaging. *Done-when: project on Blaze with all four services enabled.*
+- [ ] **4. Budget alert + hard kill-switch (before any Function is deployed).** Budget (e.g. $10/mo) with 50/90/100% email alerts. ⚠️ **Alerts don't stop spending** — wire budget → Pub/Sub topic → Cloud Function that disables project billing. Also define app-level defenses: per-user item cap + poller circuit breaker (enforced when the poller lands in Phase 3). *Done-when: budget exists, kill-switch Function deploys and is tested against a forced alert, item-cap/circuit-breaker constants written down.* **Accepted deviation:** this deploys the first Cloud Function in Phase 0 (CLAUDE.md scopes Functions to Phase 3) — chosen for cost safety; do not "correct" it back.
+- [ ] **5. Wire Firebase into the repo.** `packages/firebase/` with shared client init (`initializeApp`, typed Firestore refs, Auth, Messaging). Web config in `.env.local` (gitignored; `.env.example` committed). ⚠️ **Read env via `import.meta.env` with `WXT_PUBLIC_*` / `VITE_*` prefixes — not `process.env`.** Firebase web config is not secret; service-account keys live only in Functions. *Done-when: the extension initializes Firebase from env at runtime, no hardcoded config.*
+- [ ] **6. Define the Firestore schema.** `firestore.rules` with a strict **deny-all baseline** (stronger than, and consistent with, the "no open rules" constraint; per-user rules land in Phase 1, hardening in Phase 5). TS types for `Item`, `ItemHistory`, `User` in `packages/firebase/types.ts` matching the schema above. ⚠️ Deny-all blocks client writes, so **route Phase 0 dev/test writes through the Admin SDK or seeded emulator data.** *Done-when: types compile and are imported; rules file present.*
+- [ ] **7. Configure the OAuth client (blocks all of Phase 1).** Use `chrome.identity.launchWebAuthFlow`. ⚠️ This requires a **"Web application"** OAuth client (not "Chrome Extension") with redirect URI **`https://<extension-id>.chromiumapp.org/`** (not `chrome-extension://`), using the ID pinned in step 2. Smoke-test the full round trip: `launchWebAuthFlow` → Google consent → token → exchange into Firebase Auth. *Done-when: a manual click completes sign-in end-to-end and yields a Firebase user.*
+- [ ] **8. Stand up the Firebase Emulator Suite.** `firebase.json` with Auth, Firestore, Functions emulators; `emulators:start` script; point the extension at emulators via a flag (e.g. `WXT_PUBLIC_USE_EMULATORS`). Note: the real Google OAuth flow (step 7) runs against live Google, not the Auth emulator. *Done-when: `pnpm emulators:start` runs and the extension reads/writes local Firestore.*
+- [ ] **9. Set up CI (GitHub Actions).** On every push: install → type-check → lint → emulator-backed tests. ⚠️ **The Emulator Suite needs a JRE — add `actions/setup-java`** before `firebase emulators:exec`, or emulators won't start. *Done-when: a pushed PR shows green type-check, lint, and emulator tests.*
+- [ ] **10. Bootstrap the adapter-fixture harness.** `packages/adapters/` with a `selectors.ts` stub (shared source of truth for content scripts + poller), a `fixtures/` folder for saved HTML snapshots, and **one deliberately failing test** against a placeholder `normalize()`. *Done-when: the failing test runs in CI and fails for the right reason (harness works, logic stubbed).*
 
 ## Folder structure (planned)
 
