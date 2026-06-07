@@ -6,3 +6,5 @@ dist/
 .env
 .env.*
 !.env.example
+# Extension private key — keep off git; public key (manifest.key) is in wxt.config.ts
+*.pem
