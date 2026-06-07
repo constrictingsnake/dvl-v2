@@ -8,3 +8,11 @@ dist/
 !.env.example
 # Extension private key — keep off git; public key (manifest.key) is in wxt.config.ts
 *.pem
+
+# Firebase CLI / Emulator Suite artifacts
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pglite-debug.log
+.firebase/
