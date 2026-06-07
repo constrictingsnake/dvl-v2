@@ -2,3 +2,6 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'functions'
+allowBuilds:
+  esbuild: true
+  spawn-sync: true

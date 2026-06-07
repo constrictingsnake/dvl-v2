@@ -1,0 +1,25 @@
+{
+  "name": "@dvl/extension",
+  "description": "Auction Tracker browser extension",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "typecheck": "tsc --noEmit",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@wxt-dev/module-react": "^1.1.5",
+    "typescript": "*",
+    "wxt": "^0.20.26"
+  }
+}
