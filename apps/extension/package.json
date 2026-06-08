@@ -12,6 +12,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@dvl/firebase": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

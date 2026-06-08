@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "typescript": "*"
+  },
+  "dependencies": {
+    "firebase": "^12.14.0"
   }
 }

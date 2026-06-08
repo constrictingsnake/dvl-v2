@@ -1,3 +1,4 @@
-// Shared Firebase client init and type definitions.
-// Phase 0 steps 5-6 fill this in (initializeApp, typed refs, Item/ItemHistory/User types).
-export {};
+// Shared Firebase client init and (later) type definitions.
+// Step 5: client init. Step 6 adds Item/ItemHistory/User types here.
+export { getFirebaseApp, getFirebaseAuth, getDb, getFirebaseMessaging } from './client';
+export { getFirebaseConfig, useEmulators } from './config';

@@ -1,3 +1,9 @@
+import { getFirebaseApp, useEmulators } from '@dvl/firebase';
+
 export default defineBackground(() => {
-  console.log('Hello background!', { id: browser.runtime.id });
+  const app = getFirebaseApp();
+  console.log('Firebase initialized', {
+    projectId: app.options.projectId,
+    useEmulators,
+  });
 });
