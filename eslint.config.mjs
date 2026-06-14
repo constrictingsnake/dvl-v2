@@ -16,6 +16,14 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },
+    rules: {
+      // Allow intentionally-unused identifiers prefixed with `_` (e.g. params
+      // kept to document a contract signature, like the stub normalize(_input)).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
   },
   {
     files: ['**/*.{tsx,jsx}'],
