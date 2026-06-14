@@ -1,7 +1,12 @@
 // Shared Firebase client init. Lazy singletons so any context (background,
 // popup, content script) gets the same app, and importing never side-effects.
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
+import {
+  initializeAuth,
+  indexedDBLocalPersistence,
+  connectAuthEmulator,
+  type Auth,
+} from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import { getFirebaseConfig, useEmulators } from './config';
@@ -24,7 +29,12 @@ export function getFirebaseApp(): FirebaseApp {
 
 export function getFirebaseAuth(): Auth {
   if (!auth) {
-    auth = getAuth(getFirebaseApp());
+    // Persist to IndexedDB explicitly. The popup and the background service
+    // worker are separate JS contexts that share the extension origin's
+    // IndexedDB, so a sign-in completed in the worker shows up in the popup and
+    // survives worker restarts. Default getAuth() would fall back to in-memory
+    // persistence in the worker and not survive.
+    auth = initializeAuth(getFirebaseApp(), { persistence: indexedDBLocalPersistence });
     if (useEmulators) {
       connectAuthEmulator(auth, `http://${EMULATOR_HOST}:${AUTH_EMULATOR_PORT}`, {
         disableWarnings: true,

@@ -6,6 +6,8 @@ export default defineConfig({
   manifest: {
     name: 'Auction Tracker',
     description: 'Track saved auctions across eBay, GovDeals, and more in a unified dashboard.',
+    // `identity` powers chrome.identity.launchWebAuthFlow for Google sign-in (step 7).
+    permissions: ['identity'],
     // Public key derived from extension.pem (private key NOT committed).
     // Pins the extension ID to: bjicpagnabmhmkodglkgjcpdklngdmgo
     // Step 7 OAuth redirect URI: https://bjicpagnabmhmkodglkgjcpdklngdmgo.chromiumapp.org/

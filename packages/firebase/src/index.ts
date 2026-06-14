@@ -1,6 +1,7 @@
 // Shared Firebase client init and Firestore type definitions.
 export { getFirebaseApp, getFirebaseAuth, getDb, getFirebaseMessaging } from './client';
 export { getFirebaseConfig, useEmulators } from './config';
+export { signInWithGoogleIdToken, signOutUser, observeAuthState, type AuthUser } from './auth';
 export type {
   Item,
   ItemHistory,
