@@ -1,0 +1,50 @@
+name: CI
+
+# Run on every push and on PRs. Concurrency cancels superseded runs on the same ref.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm before setup-node so node's pnpm cache can resolve the store.
+      # Version comes from the root package.json "packageManager" field.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The Firebase Emulator Suite needs a JRE — without this, emulators won't start.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Cache the downloaded emulator JARs (keyed on the firebase-tools version)
+      # so CI doesn't re-download them every run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: firebase-emulators-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+
+      # Boot Auth + Firestore emulators, then run the test suite against them.
+      # No package defines tests yet (they land in step 10 / Phase 1); this still
+      # validates that the emulators start in CI so the harness is ready.
+      - run: pnpm emulators:exec --only auth,firestore "pnpm test"
