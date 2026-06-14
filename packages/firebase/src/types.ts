@@ -116,11 +116,12 @@ export interface ItemHistory {
 }
 
 /**
- * A registered FCM target. The extension and the web companion use different
- * push setups, so the platform is tracked to route and prune correctly.
+ * A registered FCM target, stored as the *value* of the `fcmTokens` map keyed
+ * by the token string (see `User.fcmTokens`). The extension and the web
+ * companion use different push setups, so the platform is tracked to route and
+ * prune correctly.
  */
 export interface FcmToken {
-  token: string;
   platform: 'extension' | 'web';
   updatedAt: FsTimestamp;
 }
@@ -134,8 +135,13 @@ export interface User {
   itemCount: number;
   /** Defaults applied to newly added items. */
   defaultNotify: NotificationPrefs;
-  /** One per device; fan out notifications and prune stale ones. */
-  fcmTokens: FcmToken[];
+  /**
+   * Registered devices, keyed by the FCM token string. A map (not an array) so
+   * each device writes its own entry (`fcmTokens.<token> = …`) without the
+   * read-modify-write races that clobber a shared array. Fan out to every key
+   * and prune stale ones.
+   */
+  fcmTokens: Record<string, FcmToken>;
 }
 
 /**

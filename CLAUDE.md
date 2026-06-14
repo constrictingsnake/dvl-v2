@@ -14,7 +14,8 @@ Browser extension that lets users track saved auctions across multiple sites (eB
 | Polling | Cloud Functions + Cloud Scheduler |
 | Charts | Recharts |
 | Icons | Lucide |
-| Server-side HTML parsing | cheerio |
+| Listing data — eBay | eBay Browse API (official JSON; no scraping) |
+| Server-side HTML parsing — GovDeals & scrape-only sites | cheerio |
 
 ## Architecture
 
@@ -53,9 +54,9 @@ users/{uid}
   createdAt: timestamp
   email: string | null
   displayName: string | null
-  itemCount: number              // denormalized for per-user item-cap checks
+  itemCount: number              // denormalized item-cap counter; maintain transactionally. NOT enforced until the Phase 3 trigger Function (no trigger Functions pre-Blaze) — advisory/dev-only before then.
   defaultNotify: NotificationPrefs
-  fcmTokens: { token, platform: 'extension'|'web', updatedAt }[]   // array on user doc, multi-device
+  fcmTokens: { [token]: { platform: 'extension'|'web', updatedAt } }   // map keyed by token (NOT an array) — avoids multi-device write races
 
   items/{itemId}
     url: string
@@ -71,7 +72,7 @@ users/{uid}
     bidCount: number | null      // null for pure BIN
     endTime: timestamp | null    // null for BIN / Good-'Til-Cancelled
     status: 'pending' | 'active' | 'ended' | 'stale' | 'error'
-    bidStatus: 'winning' | 'outbid' | 'unknown'   // only set from a logged-in page
+    bidStatus: 'winning' | 'outbid' | 'unknown'   // ONLY settable from a logged-in page (content script); the public-page poller/API CANNOT read it — stays at last content-script value or 'unknown'
     lastPolled: timestamp | null
     nextPollAt: timestamp | null // adaptive polling; null once ended
     consecutiveErrorCount: number
@@ -95,18 +96,20 @@ users/{uid}
 - **Adaptive polling.** Short intervals (1–2 min) for auctions ending soon; hourly for distant ones. Never poll at a flat rate.
 - **DOM selectors live in a shared config** (`packages/adapters/selectors.ts` or equivalent). The content scripts and the server-side poller both import from it. When a site changes its HTML, update the config once — not in two separate places.
 - **Use `MutationObserver` or a short polling loop in content scripts** for JS-rendered pages. Target elements may not exist at injection time.
-- **Store FCM tokens as an array on the user document.** Users may have multiple devices. Fan out notifications to all tokens and prune any that return `messaging/registration-token-not-registered`.
+- **Store FCM tokens as a map keyed by the token string** (`fcmTokens: { [token]: { platform, updatedAt } }`), not an array. Users may have multiple devices; a token-keyed map lets each device write its own entry (`fcmTokens.<token> = …`) without the read-modify-write races that clobber a shared array, and dedups naturally. Fan out notifications to every token and prune any that return `messaging/registration-token-not-registered`.
+- **Use the official eBay Browse API for eBay — do not scrape it.** It returns price, bid count, and end time as JSON on a free tier: immune to DOM drift, dodges datacenter-IP blocking (GCP egress IPs are on every scraper blocklist), and sidesteps the ToS / Chrome-Web-Store-review risk of scraping a site that offers an API. It needs an app-token (client-credentials OAuth, separate from user auth) and has a daily call quota (~5k/day default) the adaptive poller must budget against. **Scrape only sites with no API (GovDeals, Sites 3/4).** This does NOT help outbid detection — the API is app-authed, so it can't see whether *you* are the high bidder either.
+- **Outbid detection is best-effort, not authoritative.** Whether *you* are the high bidder is account state that no public listing page or API exposes — only a logged-in page (a content script) can set `bidStatus`. The background poller sees price/bid-count rise but cannot distinguish "someone outbid you" from "your own proxy bid incremented" or "two other bidders are fighting." Treat outbid as **"possibly outbid since your last visit"**: fire it only on a confident signal (a content script re-reads a logged-in page, or price rose above the user's known max bid) and word the notification as best-effort. Never present a poller-derived outbid as certain.
 - **Firebase Blaze (pay-as-you-go) is required only to deploy a Cloud Function** — the poller and the kill-switch. Since the Spark→Blaze deprecation there is no free Function deploy, and outbound HTTP from Functions does not run on Spark. **Everything before Phase 3 (auth, Firestore, FCM, schema, rules, emulators) runs on Spark at $0**, so the Blaze upgrade is deferred to the start of Phase 3. Note **Blaze = Spark's free tier + pay-as-you-go beyond it; you are billed $0 until you exceed free quota** — the real cost risk is a runaway poller, guarded by the kill-switch below, not by the plan itself.
-- **Ship baseline Firestore security rules with the first write (Phase 1), harden before release (Phase 5).** Users may only read/write their own documents: `request.auth.uid == resource.data.uid`. Never run user data through default/open rules across multiple phases. The poller Function uses a service account that bypasses client rules.
-- **Blaze upgrade + budget alert + hard kill-switch ship together, immediately before the first Function deploy (start of Phase 3) — not in Phase 0.** A buggy adaptive-polling loop bills real money. A GCP budget alert is **notification-only and does not stop spending**, so also wire budget → Pub/Sub → a Cloud Function that disables project billing. Cap items per user and add a poller circuit breaker. **Invariant: never deploy the poller without Blaze + the kill-switch already live.** The item-cap / circuit-breaker constants are written down in Phase 0 (cheap, no billing); the kill-switch Function itself deploys in Phase 3 alongside the poller. (This keeps Functions in Phase 3 as originally scoped — the earlier plan to deploy the kill-switch early in Phase 0 is reverted now that we start on Spark.)
+- **Ship baseline Firestore security rules with the first write (Phase 1), harden before release (Phase 5).** Rules are **path-based, not field-based**: items live at `users/{uid}/items/{itemId}` and carry no `uid` field, so match on the path wildcard — `match /users/{uid}/{document=**} { allow read, write: if request.auth.uid == uid; }`. Use `request.resource.data` (not `resource.data`, which is null on creates) for any create/update predicate. Test the baseline rules with `@firebase/rules-unit-testing` against the emulator so Phase 1 doesn't ship untested rules. Never run user data through default/open rules across multiple phases. The poller Function uses a service account that bypasses client rules.
+- **Blaze upgrade + budget alert + hard kill-switch ship together, immediately before the first Function deploy (start of Phase 3) — not in Phase 0.** A buggy adaptive-polling loop bills real money. A GCP budget alert is **notification-only and does not stop spending**, so also wire budget → Pub/Sub → a Cloud Function that disables project billing. Cap items per user and add a poller circuit breaker. **Invariant: never deploy the poller without Blaze + the kill-switch already live.** The item-cap / circuit-breaker constants are written down in Phase 0 (cheap, no billing); the kill-switch Function itself deploys in Phase 3 alongside the poller. (This keeps Functions in Phase 3 as originally scoped — the earlier plan to deploy the kill-switch early in Phase 0 is reverted now that we start on Spark.) **Recovery:** the kill-switch disables project billing, which reverts the project to Spark and kills all Functions instantly (intended). To recover, re-attach a billing account in the GCP console, redeploy Functions, and resolve the budget condition that tripped it — write this down so a 3am page doesn't cause panic.
 
 ## Features
 
-- Auto-capture of saved auctions via per-site content-script adapters
-- Manual add by pasting a listing URL
+- Auto-capture of saved auctions via per-site content-script adapters (**one-way: captures saves, does not detect un-saves** — users remove items from the dashboard)
+- Manual add by pasting a listing URL (creates a `pending` item; data is hydrated by the Phase 3 poller, **not** by an extension-side fetch — keeps `host_permissions` narrow for CWS review)
 - Unified real-time dashboard with filter, sort, search, and watchlist grouping
 - Background price/bid/end-time polling independent of browser state
-- Push notifications: outbid, ending soon, price threshold
+- Push notifications: outbid (**best-effort** — see constraints), ending soon, price threshold
 - Snipe reminders (user-configurable minutes before close)
 - Per-item price history chart
 - Cross-device sync via Firestore
@@ -117,6 +120,8 @@ Each adapter is a self-contained module that exports:
 - `TRIGGER` — how to detect a save (button click, URL pattern, localStorage write)
 - `SELECTORS` — DOM selectors for price, end time, bid count, title (imported from shared config)
 - `normalize(doc) → ItemData` — extracts structured data from the page
+
+**Two input flavors per site, not one.** The content script reads the **live DOM** (after JS runs); the server-side poller reads either the **eBay Browse API JSON** (eBay) or **raw fetched HTML via cheerio** (scrape-only sites) — frequently *not* the same document. So `SELECTORS` are a true shared source of truth only for scrape-only sites; for eBay the poller-side `normalize` maps an API response while `SELECTORS` stay content-script-only (capture + logged-in `bidStatus`). Don't assume "update selectors once" holds for eBay.
 
 | Site | Status |
 |---|---|
@@ -132,9 +137,9 @@ Each adapter is a self-contained module that exports:
 | 0 | WXT scaffold, Firebase project (Spark; **Blaze deferred to Phase 3**), OAuth client, Firestore schema, CI, **Firebase Emulator Suite, adapter-fixture test harness, cost-safety constants written down** — see [Phase 0 — plan of operations](#phase-0--plan-of-operations) | in progress |
 | 1 | OAuth flow, dashboard/popup UI shell (built in the extension), Firestore listener, item cards, **baseline security rules** | not started |
 | 2 | Content scripts + **eBay adapter only (auction / BIN / ended)**, service worker write path | not started |
-| 3 | Cloud Functions + Scheduler, fetch/diff, adaptive polling — **prove the full eBay vertical slice end-to-end before adding any second adapter** | not started |
+| 3 | Cloud Functions + Scheduler, fetch/diff, adaptive polling (**eBay via Browse API**; cheerio reserved for scrape-only sites) — poller uses a `collectionGroup('items')` query on `status`+`nextPollAt` (needs a composite collection-group index), paginates, and rate-limits per domain; **prove the full eBay vertical slice end-to-end before adding any second adapter** | not started |
 | 4 | FCM setup, Firestore-trigger Functions, snipe reminders | not started |
-| 5 | Remaining adapters (GovDeals, Sites 3/4), error states, retries, **security-rules hardening pass**, store submission | not started |
+| 5 | Remaining adapters (GovDeals, Sites 3/4), error states, retries, **security-rules hardening pass**, **account-deletion / delete-my-data path** (Auth user delete + recursive Firestore delete + FCM token cleanup), store submission | not started |
 
 MVP (auth + 1 site + manual polling, no push) ≈ 4–5 weeks solo.
 
@@ -190,5 +195,9 @@ A read-only web dashboard (view items, price history, settings) deployable to Fi
 - eBay has different HTML structures for auctions, Buy It Now, and ended listings. Test all three.
 - If a site starts blocking the poller (403s, CAPTCHAs), fall back to Apify for that site specifically while keeping the rest server-side.
 - Chrome Web Store review takes several days and requires a privacy policy. Don't leave this for last.
-- FCM push differs between the extension and the web companion site: MV3 service-worker push is finicky and uses a different setup than web push. Don't assume one config covers both.
-- Selector drift won't be caught by tests against live sites. Maintain a fixture corpus (saved HTML snapshots → expected `ItemData`) so CI catches regressions in your *parsing logic*, and use the Firebase Emulator Suite to test Functions, Firestore, and rules locally.
+- Google **OAuth consent-screen verification is a separate multi-day Google review** from Chrome Web Store review; an unverified app shows a scary warning to every user. Start it early, alongside the privacy policy.
+- FCM push differs between the extension and the web companion site: MV3 service-worker push is finicky and uses a different setup than web push. Don't assume one config covers both. Concretely: the Firebase Messaging JS SDK's `getToken` expects a `window`/`document` and **won't run in an MV3 service worker** — use an **offscreen document** (or self-managed `chrome.gcm` / Web Push) for the extension. Choose this approach in Phase 4; don't discover it mid-build.
+- The `history` subcollection is unbounded and grows fast near close (1-min polling). Set a **Firestore TTL policy** on `recordedAt` (TTL is free) to auto-expire old snapshots. And remember **deleting an item doc does NOT delete its subcollections** — item deletion (and account deletion) needs a **recursive delete**.
+- `endTime` from the DOM is error-prone: eBay often renders **relative** times ("2d 3h left"), and converting to an absolute `Timestamp` is timezone-sensitive. Prefer the absolute ISO value from the Browse API (eBay) / embedded JSON over parsing rendered text.
+- Selector drift won't be caught by tests against live sites. Maintain a fixture corpus so CI catches regressions in your *parsing logic* — and save **both flavors per site**: a content-script **live-DOM** snapshot AND the poller's actual input (**eBay Browse API JSON**, or **raw fetched HTML** for scrape-only sites), each mapped to expected `ItemData`. They're different documents, so a single flavor hides bugs. Use the Firebase Emulator Suite to test Functions, Firestore, and rules locally.
+- No one watches `consecutiveErrorCount` by default. Add a cheap aggregate drift signal in Phase 5 (e.g. a scheduled check: % of polls returning all-null `ItemData` per site → email) so silent selector/API breakage surfaces.
