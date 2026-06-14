@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Phase 0 baseline: deny everything. This is the strict starting point — no
+// client may read or write. Per-user rules land in Phase 1 (the first client
+// write), and the hardening pass is Phase 5. See CLAUDE.md.
+//
+// Phase 0 dev/test writes go through the Admin SDK or seeded emulator data,
+// both of which bypass these rules. The poller (Phase 3) uses a service
+// account that also bypasses them.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

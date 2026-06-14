@@ -3,5 +3,10 @@ packages:
   - 'packages/*'
   - 'functions'
 allowBuilds:
+  # Firebase web SDK build scripts aren't needed in a bundler (Vite/WXT) — skip them.
+  '@firebase/util': false
   esbuild: true
+  protobufjs: false
+  # firebase-tools optional native regex accel; falls back to JS, emulators don't need it.
+  re2: false
   spawn-sync: true
