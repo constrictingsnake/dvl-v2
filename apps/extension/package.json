@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@dvl/firebase": "workspace:*",
+    "@fontsource-variable/bodoni-moda": "^5.2.7",
+    "@fontsource-variable/inter": "^5.2.8",
+    "lucide-react": "^1.21.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -20,6 +23,9 @@
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@wxt-dev/module-react": "^1.1.5",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
     "typescript": "*",
     "wxt": "^0.20.26"
   }

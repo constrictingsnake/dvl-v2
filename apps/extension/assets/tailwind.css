@@ -1,0 +1,15 @@
+/*
+ * Tailwind entry stylesheet — imported from each entrypoint's main.tsx so the
+ * surface gets styles. The @tailwind directives expand at build time into the
+ * reset (base), component, and utility CSS.
+ *
+ * Self-hosted fonts (bundled via Fontsource — no remote CDN). The family names
+ * ('Inter Variable' / 'Bodoni Moda Variable') are wired to font-sans /
+ * font-display in tailwind.config.ts. @import must precede the @tailwind lines.
+ */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/bodoni-moda';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
