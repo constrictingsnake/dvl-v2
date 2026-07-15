@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Auction Tracker</title>
     <meta name="manifest.type" content="browser_action" />
+    <!--
+      Fixed width up front, before Tailwind/React load. Chrome auto-sizes the
+      popup window to the document's first paint and does not reliably resize
+      it afterward — without this, the brief AuthGate "Loading…" flash (much
+      narrower than the real 288px = w-72 content) locks the window small, and
+      the real content renders squeezed/wrapped inside it once auth resolves.
+    -->
+    <style>
+      html,
+      body {
+        width: 288px;
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

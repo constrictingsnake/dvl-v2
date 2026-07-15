@@ -19,8 +19,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // a visible flash of the sign-in screen on every popup open / dashboard load.
   if (status === 'loading') {
     return (
-      <div className="flex h-full w-full items-center justify-center">
-        <p className="text-sm text-neutral-700">Loading...</p>
+      <div className="flex h-full w-full items-center justify-center p-6">
+        <p className="font-mono text-xs uppercase tracking-wider text-neutral-400">Loading…</p>
       </div>
     );
   }

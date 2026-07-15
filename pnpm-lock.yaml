@@ -44,6 +44,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@dvl/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
       '@dvl/firebase':
         specifier: workspace:*
         version: link:../../packages/firebase

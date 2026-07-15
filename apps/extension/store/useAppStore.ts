@@ -74,6 +74,25 @@ export const useAppStore = create<AppState>((set) => ({
   setGroup: (group) => set({ group }),
 }));
 
-// TODO (step 9): add a `selectVisibleItems` selector here that applies
-// search + statusFilter + group and sorts by `sort`, so the dashboard reads one
-// derived list instead of filtering inline.
+/**
+ * Derived list for the dashboard (step 9): apply search + statusFilter + group,
+ * then sort by `sort`. The list (ItemList) reads THIS instead of raw `items` so
+ * filtering/sorting lives in one place. Pure function of state — call as
+ * `useAppStore(selectVisibleItems)`.
+ *
+ * TODO (human):
+ *  - Start from state.items; filter in order:
+ *      search: case-insensitive substring on (item.title ?? '') — skip if search is ''.
+ *      statusFilter: keep item.status === filter — skip if 'all'.
+ *      group: keep item.group === state.group — skip if group is null (show all).
+ *  - Sort a COPY (don't mutate state.items):
+ *      'endTime'  → by endTime ascending; null endTime (BIN/GTC) sorts last.
+ *      'price'    → by currentPrice; null prices last.
+ *      'createdAt'→ by createdAt descending (newest first).
+ *    endTime/createdAt are FsTimestamp — compare via .toMillis().
+ *  - Return the filtered+sorted array.
+ */
+export function selectVisibleItems(state: AppState): WithId<Item>[] {
+  // TODO (human): implement per the checklist above.
+  return state.items; // placeholder — no filtering/sorting yet
+}
