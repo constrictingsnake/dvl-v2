@@ -7,9 +7,12 @@
 //
 // Invariant (see CLAUDE.md): never deploy the poller without Blaze + the billing
 // kill-switch already live.
-
-/** Hard cap on tracked items per user. Bounds Firestore docs and poll workload. */
-export const MAX_ITEMS_PER_USER = 200;
+//
+// MAX_ITEMS_PER_USER moved to packages/firebase/src/limits.ts — it's a shared
+// contract the client reads as an advisory cap (Phase 1) and the poller/trigger
+// enforces for real (Phase 3). When Phase 3 server code needs it, import it from
+// @dvl/firebase (via a pure subpath, NOT the package index, so the Firebase web
+// SDK doesn't load into the server). The server-only knobs below stay here.
 
 /**
  * Adaptive polling bounds, in seconds. The poller picks a per-item interval from

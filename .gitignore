@@ -16,3 +16,6 @@ firestore-debug.log
 ui-debug.log
 pglite-debug.log
 .firebase/
+
+# personal scratch / reference (not tracked)
+TODO.txt

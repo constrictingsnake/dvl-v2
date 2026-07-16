@@ -1,8 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
-// Pull in Tailwind for this surface. Without this import the popup renders
-// completely unstyled (no utility classes resolve). Each entrypoint imports it.
+// Same Tailwind import as the popup — every surface that wants styles imports it.
 import '../../assets/tailwind.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
