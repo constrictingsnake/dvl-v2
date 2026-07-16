@@ -2,12 +2,8 @@ import { create } from 'zustand';
 import type { AuthUser, WithId, Item, ItemStatus } from '@dvl/firebase';
 
 // Shared app store (Zustand) — the single source of truth the popup and the
-// dashboard both read from. Three concerns live here:
-//   - auth:  the signed-in user (mirrors observeAuthState; wired in step 4)
-//   - items: the live Firestore item list (fed by the onSnapshot listener, step 5)
-//   - ui:    view state for the dashboard shell (search/sort/filter/group, step 9)
-// This step only establishes the typed shape + action signatures; the bodies are
-// `// TODO:` — the human fills them in as the later steps land.
+// dashboard both read from: the signed-in user, the live Firestore item list, and
+// the dashboard's view state (search/sort/filter/group).
 
 /** How the dashboard list is ordered. */
 export type SortKey = 'endTime' | 'price' | 'createdAt';
@@ -34,21 +30,13 @@ interface AppState {
   group: string | null; // active watchlist group; null = show all
 
   // --- actions ---
-  /** Set (or clear) the signed-in user; drives the signed-out/in screens. */
   setUser: (user: AuthUser | null) => void;
-  /** Replace the item list from the latest onSnapshot payload. */
   setItems: (items: WithId<Item>[]) => void;
-  /** Move the shell between loading / ready / error. */
   setStatus: (status: AppStatus) => void;
-  /** Set (or clear) the current error message. */
   setError: (error: string | null) => void;
-  /** Update the title search query. */
   setSearch: (search: string) => void;
-  /** Change the sort order. */
   setSort: (sort: SortKey) => void;
-  /** Change the status filter. */
   setStatusFilter: (filter: StatusFilter) => void;
-  /** Select a watchlist group (or null for all). */
   setGroup: (group: string | null) => void;
 }
 
@@ -75,24 +63,37 @@ export const useAppStore = create<AppState>((set) => ({
 }));
 
 /**
- * Derived list for the dashboard (step 9): apply search + statusFilter + group,
- * then sort by `sort`. The list (ItemList) reads THIS instead of raw `items` so
- * filtering/sorting lives in one place. Pure function of state — call as
- * `useAppStore(selectVisibleItems)`.
- *
- * TODO (human):
- *  - Start from state.items; filter in order:
- *      search: case-insensitive substring on (item.title ?? '') — skip if search is ''.
- *      statusFilter: keep item.status === filter — skip if 'all'.
- *      group: keep item.group === state.group — skip if group is null (show all).
- *  - Sort a COPY (don't mutate state.items):
- *      'endTime'  → by endTime ascending; null endTime (BIN/GTC) sorts last.
- *      'price'    → by currentPrice; null prices last.
- *      'createdAt'→ by createdAt descending (newest first).
- *    endTime/createdAt are FsTimestamp — compare via .toMillis().
- *  - Return the filtered+sorted array.
+ * Derived list for the dashboard: filter (search → statusFilter → group), then
+ * sort a COPY (mutating state.items breaks Zustand equality / React renders).
+ * Null endTime (BIN/GTC) and null prices sort last; createdAt is newest-first.
+ * Call as `useAppStore(selectVisibleItems)`.
  */
 export function selectVisibleItems(state: AppState): WithId<Item>[] {
-  // TODO (human): implement per the checklist above.
-  return state.items; // placeholder — no filtering/sorting yet
+  const query = state.search.trim().toLowerCase();
+
+  const filtered = state.items.filter((item) => {
+    if (query && !(item.title ?? '').toLowerCase().includes(query)) return false;
+    if (state.statusFilter !== 'all' && item.status !== state.statusFilter) return false;
+    if (state.group !== null && item.group !== state.group) return false;
+    return true;
+  });
+
+  const asc = (a: number | null, b: number | null) => {
+    if (a === b) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a - b;
+  };
+
+  return [...filtered].sort((a, b) => {
+    switch (state.sort) {
+      case 'endTime':
+        return asc(a.endTime?.toMillis() ?? null, b.endTime?.toMillis() ?? null);
+      case 'createdAt':
+        // newest first; a just-written item's serverTimestamp is briefly null
+        return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0);
+      case 'price':
+        return asc(a.currentPrice ?? null, b.currentPrice ?? null);
+    }
+  });
 }

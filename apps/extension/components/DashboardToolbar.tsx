@@ -1,30 +1,30 @@
 import { useAppStore } from '@/store/useAppStore';
+import type { SortKey, StatusFilter } from '@/store/useAppStore';
+import type { ItemStatus } from '@dvl/firebase';
 
-// Dashboard shell controls (step 9): title search, sort, status filter, and
-// watchlist group surfacing — all client-side over the store's ui slice. This is
-// shell POLISH, not an engine: wire the inputs to the setters; the actual
-// filtering/sorting is done by selectVisibleItems (store), which ItemList reads.
-//
-// Design language (CLAUDE.md): quiet controls — ghost/text styling, neutral,
-// left-aligned. The one pink accent on this view belongs to AddItemForm's submit,
-// not to a toolbar control.
+const STATUSES: ItemStatus[] = ['pending', 'active', 'ended', 'stale', 'error'];
 
-/**
- * TODO (human):
- *  - search: <input> bound to s.search / s.setSearch (controlled).
- *  - sort: <select> over SortKey ('endTime' | 'price' | 'createdAt') → s.setSort.
- *  - statusFilter: <select> over StatusFilter ('all' | ItemStatus) → s.setStatusFilter.
- *  - group: surface the distinct item.group values (derive from s.items) as a
- *      picker → s.setGroup(value | null). null = show all.
- *  - Keep it minimal and on-brand; no need for fancy dropdown components.
- */
+const selectCls =
+  'bg-transparent font-mono text-[10px] uppercase tracking-wider text-neutral-500 ' +
+  'hover:text-neutral-900 focus:text-neutral-900 focus:outline-none cursor-pointer';
+
 export function DashboardToolbar() {
   const search = useAppStore((s) => s.search);
   const setSearch = useAppStore((s) => s.setSearch);
+  const sort = useAppStore((s) => s.sort);
+  const setSort = useAppStore((s) => s.setSort);
+  const statusFilter = useAppStore((s) => s.statusFilter);
+  const setStatusFilter = useAppStore((s) => s.setStatusFilter);
+  const group = useAppStore((s) => s.group);
+  const setGroup = useAppStore((s) => s.setGroup);
+  const items = useAppStore((s) => s.items);
 
-  // TODO (human): add the sort / filter / group controls per the checklist above.
+  // Distinct non-null groups from the live items; the picker stays hidden until
+  // something writes a `group` (nothing does yet — forward-wiring, not dead code).
+  const groups = [...new Set(items.map((i) => i.group).filter((g): g is string => g != null))];
+
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-4">
       <input
         type="text"
         value={search}
@@ -32,9 +32,44 @@ export function DashboardToolbar() {
         placeholder="SEARCH…"
         className="flex-1 bg-transparent font-mono text-xs uppercase tracking-wider text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
       />
-      <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">
-        Sort / Filter / Group
-      </span>
+
+      <select
+        className={selectCls}
+        value={sort}
+        onChange={(e) => setSort(e.target.value as SortKey)}
+      >
+        <option value="endTime">SORT · ENDING</option>
+        <option value="price">SORT · PRICE</option>
+        <option value="createdAt">SORT · ADDED</option>
+      </select>
+
+      <select
+        className={selectCls}
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+      >
+        <option value="all">ALL STATUS</option>
+        {STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {s.toUpperCase()}
+          </option>
+        ))}
+      </select>
+
+      {groups.length > 0 && (
+        <select
+          className={selectCls}
+          value={group ?? ''}
+          onChange={(e) => setGroup(e.target.value || null)}
+        >
+          <option value="">ALL GROUPS</option>
+          {groups.map((g) => (
+            <option key={g} value={g}>
+              {g.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

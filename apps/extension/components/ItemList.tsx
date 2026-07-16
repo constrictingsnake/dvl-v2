@@ -1,14 +1,11 @@
-import { useAppStore } from '@/store/useAppStore';
+import { selectVisibleItems, useAppStore } from '@/store/useAppStore';
 import { removeItem } from '@/lib/items';
 import { ItemCard } from '@/components/ItemCard';
 
-// The dashboard item list. Reads items off the store (fed by the step-5 onSnapshot
-// listener) and renders a card each, with loading + empty states. Step 9 switches
-// the source from raw `items` to a `selectVisibleItems` selector so
-// search/sort/filter/group apply.
 export function ItemList() {
   const status = useAppStore((s) => s.status);
-  const items = useAppStore((s) => s.items);
+  const items = useAppStore(selectVisibleItems);
+  const totalItems = useAppStore((s) => s.items.length);
   const uid = useAppStore((s) => s.user?.uid);
 
   if (status === 'loading')
@@ -16,7 +13,9 @@ export function ItemList() {
   if (items.length === 0)
     return (
       <p className="font-mono text-xs uppercase tracking-wider text-neutral-400">
-        No items yet — your tracked auctions will show up here.
+        {totalItems === 0
+          ? 'No items yet — your tracked auctions will show up here.'
+          : 'No items match the current filters.'}
       </p>
     );
 
