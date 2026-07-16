@@ -10,8 +10,8 @@ import { useAppStore } from '@/store/useAppStore';
 // e54948d8-4ca2-41ff-a1db-15e8956b6206): warm-grey page background, one hard
 // 2px-bordered container, mono section labels. AuthGate drives auth -> store
 // and gates the whole surface; DashboardHome is the signed-in content.
-// useItemsSync (step 5) feeds the store; AddItemForm (step 7), DashboardToolbar
-// (step 9), and ItemList (steps 5/6/8) render off it.
+// useItemsSync (step 5) feeds the store; AddItemForm (step 7, eBay-only),
+// DashboardToolbar (step 9), and ItemList (steps 5/6/8) render off it.
 
 function DashboardHome() {
   const user = useAppStore((s) => s.user);

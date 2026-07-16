@@ -2,27 +2,10 @@ import { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { createPendingItem } from '@/lib/items';
 
-// Manual add (step 7): paste a listing URL -> a `pending` item. Completes the
-// write -> listener -> card loop without content scripts. The site is detected
-// from the host inside createPendingItem (siteFromUrl); this form only collects
-// the URL, submits, and surfaces validation / over-cap errors.
-//
-// Design language (CLAUDE.md): this is the dashboard's ONE primary action — the
-// submit button is the single hot-pink `brand` accent for the view. Everything
-// else stays neutral.
-
-/**
- * TODO (human):
- *  - const uid = useAppStore((s) => s.user?.uid); guard if missing.
- *  - Controlled input for the URL; local `busy` + `error` state.
- *  - onSubmit (preventDefault): setBusy(true); try { await createPendingItem(uid, url);
- *      clear the input } catch (e) { setError(message) } finally { setBusy(false) }.
- *  - createPendingItem throws on invalid URL / unrecognized site / over cap —
- *    show that message inline. No success toast needed: the onSnapshot listener
- *    makes the new `pending` card appear on its own.
- *  - The submit button is the pink accent (bg-brand text-white, or text-brand);
- *    disable while busy.
- */
+// Manual add — eBay only (step 7): paste an eBay listing URL -> a `pending` item.
+// createPendingItem throws on a non-eBay URL / over cap; we surface the message
+// inline. No success toast — the onSnapshot listener paints the new card. The
+// submit button is the view's single hot-pink `brand` accent (design language).
 export function AddItemForm() {
   const uid = useAppStore((s) => s.user?.uid);
   const [url, setUrl] = useState('');
@@ -50,7 +33,7 @@ export function AddItemForm() {
         type="url"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        placeholder="PASTE A LISTING URL…"
+        placeholder="PASTE AN EBAY LISTING URL…"
         className="flex-1 bg-transparent font-mono text-xs uppercase tracking-wider text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
       />
       <button
@@ -60,7 +43,7 @@ export function AddItemForm() {
       >
         Add
       </button>
-      {error && <p className="font-mono text-xs text-red-600">{error}</p>}
+      {error && <p className="font-mono text-xs text-neutral-500">{error}</p>}
     </form>
   );
 }

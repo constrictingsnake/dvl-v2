@@ -1,10 +1,19 @@
 // Item read path. The dashboard/popup never query Firestore directly — they read
 // the live list off the Zustand store, which this listener feeds. SDK usage
 // (getDb + firebase/firestore) is encapsulated here, same pattern as lib/user.ts.
-// Later steps add createPendingItem (step 7) and removeItem (step 8) alongside.
-import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+// Steps 7/8 add createPendingItem + removeItem alongside. (Manual add is scoped
+// to eBay only — see CLAUDE.md; scrape-only sites are deferred.)
+import {
+  collection,
+  doc,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp,
+  type Unsubscribe,
+} from 'firebase/firestore';
 import type { WithId, Item } from '@dvl/firebase';
-import { getDb } from '@dvl/firebase';
+import { getDb, MAX_ITEMS_PER_USER } from '@dvl/firebase';
+import { siteFromUrl } from '@dvl/adapters';
 
 /**
  * Subscribe to users/{uid}/items in real time. Calls `onItems` with the full
@@ -35,40 +44,61 @@ export function subscribeToItems(
 }
 
 /**
- * Manual add (step 7): validate `url`, detect its `site`, and transactionally
- * write a `pending` Item to users/{uid}/items while bumping users/{uid}.itemCount
- * — enforcing the advisory MAX_ITEMS_PER_USER cap. Data hydration is deferred to
- * the Phase 3 poller; the item stays `pending` until then. Rejects (throws) on an
- * invalid URL, an unrecognized site, or an over-cap user so the form can message it.
- *
- * TODO (human):
- *  - Validate url: `new URL(url)` in try/catch; reject non-http(s).
- *  - const site = siteFromUrl(url) (from '@dvl/adapters'); reject if null.
- *  - const db = getDb();
- *  - const userRef = doc(db, 'users', uid);
- *  - const itemRef = doc(collection(db, 'users', uid, 'items')); // auto-id
- *  - runTransaction(db, async (tx) => {
- *      const userSnap = await tx.get(userRef);
- *      const count = userSnap.data()?.itemCount ?? 0;
- *      if (count >= MAX_ITEMS_PER_USER) throw new Error('Item limit reached');
- *      tx.set(itemRef, { ...pending Item defaults below });
- *      tx.update(userRef, { itemCount: count + 1 });
- *    });
- *  - Pending Item defaults (see Item in packages/firebase/src/types.ts): url, site,
- *    listingType: 'auction' (best guess until polled), addedVia: 'manual',
- *    createdAt: serverTimestamp(), title/imageUrl/currentPrice/... : null,
- *    currency: 'USD', status: 'pending', bidStatus: 'unknown',
- *    consecutiveErrorCount: 0, lastError: null, nextPollAt: null,
- *    notify: user.defaultNotify (or the same defaults ensureUserDoc uses),
- *    notificationState: { endingSoonSentAt: null, outbidNotifiedPrice: null,
- *    priceThresholdSentAt: null }, group: null.
- *  - Type the payload WithFieldValue<Item> so serverTimestamp() typechecks.
- *  - MAX_ITEMS_PER_USER lives in functions/src/limits.ts — import it (advisory /
- *    client-side only; real enforcement is the Phase 3 trigger).
+ * Manual add — eBay only (step 7): detect the `site` from `url` and
+ * transactionally write a `pending` Item to users/{uid}/items while bumping
+ * users/{uid}.itemCount — enforcing the advisory MAX_ITEMS_PER_USER cap. Data
+ * hydration is deferred to the Phase 3 poller (Browse API); the item stays
+ * `pending` until then. Throws on a non-eBay URL or an over-cap user so the form
+ * can surface the message. (eBay-only rationale is in CLAUDE.md.)
  */
 export async function createPendingItem(uid: string, url: string): Promise<void> {
-  // TODO (human): implement per the checklist above.
-  throw new Error(`createPendingItem not implemented (uid=${uid}, url=${url})`);
+  const site = siteFromUrl(url);
+  if (site !== 'ebay') {
+    throw new Error('only ebay links rn');
+  }
+  const db = getDb();
+  const userRef = doc(db, 'users', uid);
+  const itemRef = doc(collection(db, 'users', uid, 'items'));
+  await runTransaction(db, async (tx) => {
+    const userSnap = await tx.get(userRef);
+    const count = userSnap.data()?.itemCount ?? 0;
+    if (count >= MAX_ITEMS_PER_USER) {
+      throw new Error('Item Limit Reached');
+    }
+    tx.set(itemRef, {
+      url,
+      site,
+      listingType: 'auction',
+      addedVia: 'manual',
+      createdAt: serverTimestamp(),
+      title: null,
+      imageUrl: null,
+      currency: 'USD',
+      currentPrice: null,
+      buyItNowPrice: null,
+      bidCount: null,
+      endTime: null,
+      status: 'pending',
+      bidStatus: 'unknown',
+      lastPolled: null,
+      nextPollAt: null,
+      consecutiveErrorCount: 0,
+      lastError: null,
+      notify: userSnap.data()?.defaultNotify ?? {
+        onOutbid: false,
+        minutesBefore: null,
+        priceThreshold: null,
+        priceThresholdDirection: null,
+      },
+      notificationState: {
+        endingSoonSentAt: null,
+        outbidNotifiedPrice: null,
+        priceThresholdSentAt: null,
+      },
+      group: null,
+    });
+    tx.update(userRef, { itemCount: count + 1 });
+  });
 }
 
 /**
