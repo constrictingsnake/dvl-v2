@@ -163,6 +163,9 @@ export interface ItemData {
   buyItNowPrice: number | null;
   bidCount: number | null;
   endTimeMs: number | null; // epoch millis; null if no end
+  /** True when the source shows the listing has closed (ended banner / API
+   *  state). The write path maps it to status 'ended' vs 'active'. */
+  ended: boolean;
   /** Set only when scraped from a logged-in page (content script); else null. */
   bidStatus: BidStatus | null;
 }

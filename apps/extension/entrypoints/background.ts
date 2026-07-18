@@ -21,6 +21,18 @@ export default defineBackground(() => {
         );
       return true; // keep the channel open for the async response
     }
+    if (message?.type === 'capture:save' || message?.type === 'capture:visit') {
+      // TODO (human, Phase 2 step 5): the capture write path.
+      // - await getFirebaseAuth().authStateReady() FIRST — this worker may have
+      //   just woken up for this very message, and currentUser is null until
+      //   the IndexedDB persistence rehydrates
+      // - no currentUser → sendResponse({ ok: false, error: 'not signed in' })
+      // - else upsertCapturedItem(uid, message.data, save ? 'save' : 'visit')
+      //   → sendResponse({ ok: true, outcome }); catch → { ok: false, error }
+      // (type the message as CaptureMessage from '@/lib/capture-messages')
+      sendResponse({ ok: false, error: 'not implemented' });
+      return true;
+    }
     if (message?.type === 'auth:signOut') {
       signOutGoogle()
         .then(() => sendResponse({ ok: true }))
