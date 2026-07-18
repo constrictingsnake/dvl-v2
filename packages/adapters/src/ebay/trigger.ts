@@ -7,11 +7,11 @@
 export const EBAY_TRIGGER = {
   kind: 'button-click',
   /**
-   * Selector for the watch button(s). The content script uses a DELEGATED
-   * click listener + closest() against this (the button re-renders; never bind
-   * to the node directly).
-   * TODO (human): fill from the fixtures — note eBay may render several watch
-   * affordances (header heart, sticky bar); cover them comma-separated.
+   * Selector for the watch button. The content script uses a DELEGATED click
+   * listener + closest() against this (the button re-renders; never bind to the
+   * node directly). eBay tags the watch heart with a stable data-testid that
+   * resolves on every live listing (auction / BIN / auction+BIN) and is absent
+   * on ended listings — exactly the pages where a save should / shouldn't fire.
    */
-  watchButton: '', // TODO (human)
+  watchButton: '[data-testid="x-watch-heart"]',
 } as const;

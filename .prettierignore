@@ -6,3 +6,5 @@ dist
 pnpm-lock.yaml
 *.md
 .claude
+# Captured live-DOM fixtures — verbatim snapshots, never reformat.
+packages/adapters/fixtures/*.html
