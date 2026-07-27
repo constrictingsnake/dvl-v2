@@ -1,6 +1,6 @@
 import { getFirebaseApp, getFirebaseAuth, useEmulators } from '@dvl/firebase';
 import { signInWithGoogle, signOutGoogle } from '@/lib/auth';
-import { upsertCapturedItem } from '@/lib/items';
+import { upsertCapturedItem } from '@/lib/capture-write';
 import type { CaptureMessage } from '@/lib/capture-messages';
 
 export default defineBackground(() => {
