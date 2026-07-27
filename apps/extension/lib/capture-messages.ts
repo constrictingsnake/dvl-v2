@@ -21,12 +21,15 @@ export type CaptureResponse =
   | { ok: false; error: string };
 
 /**
- * Send a capture message to the background worker.
- * TODO (human): browser.runtime.sendMessage(msg) -> CaptureResponse; normalize
- * undefined / thrown errors -> { ok: false, error } (same shape as
- * requestSignIn in auth-messages.ts).
+ * Send a capture message to the background worker (mirrors requestSignIn). The
+ * worker owns every policy decision; this just ships ItemData and relays the
+ * outcome. A dead channel / undefined reply normalizes to { ok: false }.
  */
-export async function sendCapture(_msg: CaptureMessage): Promise<CaptureResponse> {
-  // TODO (human): implement — Phase 2 step 4
-  return { ok: false, error: 'not implemented' };
+export async function sendCapture(msg: CaptureMessage): Promise<CaptureResponse> {
+  try {
+    const res = await browser.runtime.sendMessage(msg);
+    return res ?? { ok: false, error: 'no response from background' };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
