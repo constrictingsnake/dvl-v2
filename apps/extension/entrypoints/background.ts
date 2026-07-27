@@ -1,5 +1,7 @@
-import { getFirebaseApp, useEmulators } from '@dvl/firebase';
+import { getFirebaseApp, getFirebaseAuth, useEmulators } from '@dvl/firebase';
 import { signInWithGoogle, signOutGoogle } from '@/lib/auth';
+import { upsertCapturedItem } from '@/lib/items';
+import type { CaptureMessage } from '@/lib/capture-messages';
 
 export default defineBackground(() => {
   const app = getFirebaseApp();
@@ -22,15 +24,24 @@ export default defineBackground(() => {
       return true; // keep the channel open for the async response
     }
     if (message?.type === 'capture:save' || message?.type === 'capture:visit') {
-      // TODO (human, Phase 2 step 5): the capture write path.
-      // - await getFirebaseAuth().authStateReady() FIRST — this worker may have
-      //   just woken up for this very message, and currentUser is null until
-      //   the IndexedDB persistence rehydrates
-      // - no currentUser → sendResponse({ ok: false, error: 'not signed in' })
-      // - else upsertCapturedItem(uid, message.data, save ? 'save' : 'visit')
-      //   → sendResponse({ ok: true, outcome }); catch → { ok: false, error }
-      // (type the message as CaptureMessage from '@/lib/capture-messages')
-      sendResponse({ ok: false, error: 'not implemented' });
+      // authStateReady() FIRST: the worker may have just woken up for this very
+      // message, and currentUser stays null until IndexedDB persistence
+      // rehydrates the session.
+      const msg = message as CaptureMessage;
+      const auth = getFirebaseAuth();
+      auth
+        .authStateReady()
+        .then(() => {
+          const uid = auth.currentUser?.uid;
+          if (!uid) return sendResponse({ ok: false, error: 'not signed in' });
+          const mode = msg.type === 'capture:save' ? 'save' : 'visit';
+          return upsertCapturedItem(uid, msg.data, mode).then((outcome) =>
+            sendResponse({ ok: true, outcome }),
+          );
+        })
+        .catch((e: unknown) =>
+          sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+        );
       return true;
     }
     if (message?.type === 'auth:signOut') {
