@@ -8,6 +8,11 @@ import {
   type Auth,
 } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
+import {
+  getFirestore as getLiteFirestore,
+  connectFirestoreEmulator as connectLiteEmulator,
+  type Firestore as LiteFirestore,
+} from 'firebase/firestore/lite';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import { getFirebaseConfig, useEmulators } from './config';
 
@@ -19,6 +24,7 @@ const FIRESTORE_EMULATOR_PORT = 8080;
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
+let liteDb: LiteFirestore | undefined;
 
 export function getFirebaseApp(): FirebaseApp {
   if (!app) {
@@ -52,6 +58,24 @@ export function getDb(): Firestore {
     }
   }
   return db;
+}
+
+/**
+ * Firestore for the MV3 background service worker ONLY. The full SDK's RPCs go
+ * through Closure `XhrIo` (XMLHttpRequest), which does not exist in a service
+ * worker — every get/transaction fails there with an empty error. The Lite SDK
+ * is fetch-based, so it works in the worker; it has no real-time listeners, but
+ * the worker only ever reads/writes (the dashboard owns the onSnapshot). Never
+ * mix this with getDb() in the same JS context — one context, one SDK.
+ */
+export function getLiteDb(): LiteFirestore {
+  if (!liteDb) {
+    liteDb = getLiteFirestore(getFirebaseApp());
+    if (useEmulators) {
+      connectLiteEmulator(liteDb, EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
+    }
+  }
+  return liteDb;
 }
 
 /**

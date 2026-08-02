@@ -12,6 +12,7 @@
     "@dvl/firebase": "workspace:*"
   },
   "devDependencies": {
+    "happy-dom": "^20.10.6",
     "typescript": "*",
     "vitest": "^3.2.4"
   }

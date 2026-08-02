@@ -26,6 +26,11 @@ export default tseslint.config(
     },
   },
   {
+    // Node utility scripts (fixture trimming / selector discovery) run under node.
+    files: ['**/scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     files: ['**/*.{tsx,jsx}'],
     ...react.configs.flat.recommended,
     plugins: { react, 'react-hooks': reactHooks },

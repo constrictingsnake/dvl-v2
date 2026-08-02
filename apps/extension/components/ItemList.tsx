@@ -1,10 +1,15 @@
+import { useShallow } from 'zustand/react/shallow';
 import { selectVisibleItems, useAppStore } from '@/store/useAppStore';
 import { removeItem } from '@/lib/items';
 import { ItemCard } from '@/components/ItemCard';
 
 export function ItemList() {
   const status = useAppStore((s) => s.status);
-  const items = useAppStore(selectVisibleItems);
+  // selectVisibleItems builds a fresh filtered+sorted array each call; without a
+  // shallow-equality wrapper Zustand's useSyncExternalStore sees a new reference
+  // every render and loops forever (React #185). useShallow returns the cached
+  // array while its contents are unchanged.
+  const items = useAppStore(useShallow(selectVisibleItems));
   const totalItems = useAppStore((s) => s.items.length);
   const uid = useAppStore((s) => s.user?.uid);
 
